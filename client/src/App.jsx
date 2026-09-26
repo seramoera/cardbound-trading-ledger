@@ -6,14 +6,51 @@ import confirmIcon from './assets/confirm_icon.svg'
 import smallStar from './assets/small_star.svg'
 import goldDivider from './assets/GoldDivider.svg'
 import dividerAsset from './assets/divider.svg'
+import cardboundTop from './assets/cardbound_top.svg'
+import cardboundFooter from './assets/cardbound_footer.svg'
 
 const EMPTY_FORM = { displayName: '', username: '', password: '', confirmPassword: '' }
+
+const partnerColorOptions = ['gold', 'blue', 'purple', 'rose', 'sage', 'amber', 'teal']
 
 const partnerCards = [
   { id: 1, name: 'Elara Nightwhisper', initials: 'EN', color: 'blue', note: 'Met at FNM. Has lots of blue staples.', pending: 3, want: 2, have: 1, traded: 1, total: 40 },
   { id: 2, name: 'Dorian Ashvale', initials: 'DA', color: 'purple', note: 'Commander player, mostly green and black.', pending: 2, want: 1, have: 1, traded: 1, total: 35 },
-  { id: 3, name: 'Mira Goldenleaf', initials: 'MG', color: 'green', note: 'Competitive modern player.', pending: 2, want: 1, have: 0, traded: 1, total: 5 },
+  { id: 3, name: 'Mira Goldenleaf', initials: 'MG', color: 'amber', note: 'Competitive modern player.', pending: 2, want: 1, have: 0, traded: 1, total: 5 },
 ]
+
+function getRandomPartnerColor() {
+  const index = Math.floor(Math.random() * partnerColorOptions.length)
+  return partnerColorOptions[index]
+}
+
+function getPartnerGradient(color) {
+  const gradients = {
+    gold: 'linear-gradient(90deg, #d7ad61, #f0d898)',
+    blue: 'linear-gradient(90deg, #8ab6ff, #d8ecff)',
+    purple: 'linear-gradient(90deg, #b58af7, #efd9ff)',
+    rose: 'linear-gradient(90deg, #d0768a, #f1d0d5)',
+    sage: 'linear-gradient(90deg, #a7d5a6, #d6efd3)',
+    amber: 'linear-gradient(90deg, #d09941, #f1d07a)',
+    teal: 'linear-gradient(90deg, #7cc9c1, #d4f5f0)',
+  }
+
+  return gradients[color] || gradients.gold
+}
+
+function getPartnerBorderColor(color) {
+  const colors = {
+    gold: 'rgba(216, 176, 106, 0.7)',
+    blue: 'rgba(75, 140, 255, 0.55)',
+    purple: 'rgba(163, 100, 255, 0.55)',
+    rose: 'rgba(208, 118, 138, 0.5)',
+    sage: 'rgba(132, 190, 130, 0.45)',
+    amber: 'rgba(208, 153, 65, 0.5)',
+    teal: 'rgba(100, 190, 180, 0.48)',
+  }
+
+  return colors[color] || colors.gold
+}
 
 const historyRows = [
   { partner: 'Elara Nightwhisper', card: 'Snapcaster Mage', status: 'Received', date: 'Aug 15', color: 'blue' },
@@ -314,7 +351,7 @@ export default function App() {
       id: Date.now(),
       name: partnerForm.name.trim(),
       initials: partnerForm.name.trim().slice(0, 2).toUpperCase(),
-      color: 'blue',
+      color: getRandomPartnerColor(),
       note: partnerForm.notes.trim() || 'New trading partner.',
       pending: 1,
       want: 0,
@@ -498,66 +535,123 @@ export default function App() {
   }
 
   if (session && screen === 'dashboard') {
+    const homeAccents = ['gold', 'blue', 'purple', 'rose', 'sage', 'amber', 'teal']
+
     return (
       <div className="app-shell scene-shell dashboard-shell">
-        <header className="top-bar">
-          <div className="brand">CARDBOUND</div>
-          <div className="top-actions">
-            <button type="button" className="mini-button" onClick={() => setScreen('history')}>History</button>
-            <button type="button" className="mini-button" onClick={() => setScreen('new-partner')}>+ Add Partner</button>
-            <button type="button" className="mini-button ghost" onClick={handleSignOut}>Sign Out</button>
+        <header className="home-header">
+          <div className="home-top-bar">
+            <img src={cardboundTop} alt="Cardbound" className="topbar-logo" />
+            <div className="home-top-actions">
+              <button type="button" className="home-mini-button" onClick={() => setScreen('history')}>History</button>
+              <button type="button" className="home-add-button" onClick={() => setScreen('new-partner')}>+ Add Partner</button>
+              <span className="home-top-divider" aria-hidden="true" />
+              <span className="home-username">{currentUser?.username || currentUser?.display_name || 'trader'}</span>
+              <button type="button" className="home-signout-button" onClick={handleSignOut}>SIGN OUT</button>
+            </div>
+          </div>
+
+          <div className="home-stats-bar">
+            <span className="home-stat">Partners <strong>{partnerCards.length}</strong></span>
+            <span className="home-stat-divider" />
+            <span className="home-stat">Pending <strong>7</strong></span>
+            <span className="home-stat-divider" />
+            <span className="home-stat">Traded <strong>3</strong></span>
           </div>
         </header>
 
-        <main className="dashboard-page">
-          <div className="dashboard-header">
-            <div className="status-badge">Home</div>
-            <div className="status-badge">{currentUser?.display_name || currentUser?.username || 'Trader'}</div>
-            <div className="status-badge">Partners: {partnerCards.length}</div>
-            <div className="status-badge">Pending: 7</div>
-            <div className="status-badge">Traded: 3</div>
-          </div>
+        <main className="home-page">
 
-          <h2 className="section-title">Trading Partners</h2>
+          <h2 className="home-section-title">Trading Partners</h2>
 
-          <div className="search-wrap">
+          <div className="home-search-wrap">
+            <span className="home-search-icon" aria-hidden="true">
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+                <circle cx="11" cy="11" r="7" stroke="currentColor" strokeWidth="2" />
+                <line x1="21" y1="21" x2="16.65" y2="16.65" stroke="currentColor" strokeWidth="2" strokeLinecap="round" />
+              </svg>
+            </span>
             <input type="text" placeholder="Search partners by name or notes..." />
           </div>
 
-          <section className="partner-grid">
-            {partnerCards.map((partner) => (
-              <button
-                type="button"
-                key={partner.id}
-                className={`partner-card ${selectedPartner?.id === partner.id ? 'selected' : ''}`}
-                onClick={() => {
-                  setSelectedPartner(partner)
-                  setScreen('trade')
-                }}
-              >
-                <div className="partner-row">
-                  <div className={`mini-avatar ${partner.color}`}>{partner.initials}</div>
-                  <div className="partner-name-wrap">
-                    <div className="partner-name">{partner.name}</div>
-                    <div className="partner-note">{partner.note}</div>
+          <section className="home-grid">
+            {partnerCards.map((partner, index) => {
+              const accent = partner.color || homeAccents[index % homeAccents.length]
+
+              return (
+                <button
+                  type="button"
+                  key={partner.id}
+                  className={`home-card home-card-${accent} ${selectedPartner?.id === partner.id ? 'selected' : ''}`}
+                  style={selectedPartner?.id === partner.id ? { '--card-border-color': getPartnerBorderColor(accent) } : undefined}
+                  onClick={() => {
+                    setSelectedPartner(partner)
+                    setScreen('trade')
+                  }}
+                >
+                  <div className="home-card-body">
+                    <div className="home-card-row">
+                      <div className={`home-avatar ${accent}`}>
+                        {partner.initials}
+                        <span className="home-avatar-dot" />
+                      </div>
+                      <div className="home-card-name-wrap">
+                        <div className="home-card-name-row">
+                          <span className="home-card-name">{partner.name}</span>
+                          <span className="home-pending-badge">{partner.pending} Pending</span>
+                        </div>
+                        <div className="home-card-note">{partner.note}</div>
+                      </div>
+                    </div>
+
+                    <div className="home-stats-row">
+                      <div className="home-stat-col">
+                        <span className="home-stat-num">{partner.pending}</span>
+                        <span className="home-stat-label">Pending</span>
+                      </div>
+                      <div className="home-stat-col">
+                        <span className="home-stat-num blue">{partner.want}</span>
+                        <span className="home-stat-label">I Want</span>
+                      </div>
+                      <div className="home-stat-col">
+                        <span className="home-stat-num green">{partner.have}</span>
+                        <span className="home-stat-label">They Want</span>
+                      </div>
+                      <div className="home-stat-col">
+                        <span className="home-stat-num">{partner.traded}</span>
+                        <span className="home-stat-label">Traded</span>
+                      </div>
+                    </div>
+
+                    <div className="home-progress-label">
+                      <span>Trade Progress</span>
+                      <span>{partner.total}%</span>
+                    </div>
+                    <div className="home-progress-wrap">
+                      <div className="home-progress-bar" style={{ width: `${partner.total}%`, background: getPartnerGradient(partner.color) }} />
+                    </div>
                   </div>
-                </div>
 
-                <div className="stats-row">
-                  <span>{partner.pending} Pending</span>
-                  <span>{partner.want} I want</span>
-                  <span>{partner.have} They want</span>
-                  <span>{partner.traded} Traded</span>
-                </div>
-
-                <div className="progress-wrap">
-                  <div className="progress-bar" style={{ width: `${partner.total}%` }} />
-                </div>
-                <div className="last-trade">Last traded {partner.lastTrade || 'Aug 15, 2026'}</div>
-              </button>
-            ))}
+                  <div className="home-card-footer">Last traded {partner.lastTrade || 'Aug 15, 2026'}</div>
+                </button>
+              )
+            })}
           </section>
         </main>
+
+        <footer className="home-footer">
+          <div className="home-footer-brand">
+            <img src={cardboundFooter} alt="Cardbound" className="footer-logo" />
+            <span className="home-footer-divider" aria-hidden="true" />
+            <span className="home-footer-text">Your personal trading ledger</span>
+          </div>
+
+          <div className="home-footer-meta">
+            <span>Not affiliated with Wizards of the Coast</span>
+            <span className="home-footer-divider" aria-hidden="true" />
+            <span>v1.0.0</span>
+          </div>
+        </footer>
       </div>
     )
   }
@@ -566,7 +660,7 @@ export default function App() {
     return (
       <div className="app-shell scene-shell dashboard-shell">
         <header className="top-bar">
-          <div className="brand">CARDBOUND</div>
+          <img src={cardboundTop} alt="Cardbound" className="topbar-logo" />
           <button type="button" className="mini-button ghost" onClick={() => setScreen('dashboard')}>Back</button>
         </header>
 
@@ -620,7 +714,7 @@ export default function App() {
     return (
       <div className="app-shell scene-shell dashboard-shell">
         <header className="top-bar">
-          <div className="brand">CARDBOUND</div>
+          <img src={cardboundTop} alt="Cardbound" className="topbar-logo" />
           <button type="button" className="mini-button ghost" onClick={() => setScreen('dashboard')}>Back</button>
         </header>
 
@@ -660,13 +754,18 @@ export default function App() {
 
   if (screen === 'new-partner') {
     return (
-      <div className="app-shell scene-shell">
-        <header className="top-brand">CARDBOUND</header>
+      <div className="app-shell scene-shell new-partner-shell">
+        <header className="top-bar">
+          <img src={cardboundTop} alt="Cardbound" className="topbar-logo" />
+        </header>
+
         <div className="overlay-backdrop" onClick={() => setScreen('dashboard')} />
 
         <div className="modal-card" role="dialog" aria-modal="true">
-          <h3>NEW TRADING PARTNER</h3>
-          <div className="panel-divider" />
+          <h3>
+            <span className="title-accent">N</span>ew <span className="title-accent">T</span>rading <span className="title-accent">P</span>artner
+          </h3>
+          <img src={goldDivider} alt="" className="panel-divider" />
 
           <form onSubmit={handleSavePartner} className="partner-form">
             <label htmlFor="partnerName">Name</label>
@@ -688,10 +787,24 @@ export default function App() {
 
             <div className="modal-actions">
               <button type="submit" className="primary-button">Save Partner</button>
-              <button type="button" className="ghost-button" onClick={() => setScreen('dashboard')}>Cancel</button>
+              <button type="button" className="ghost-button" onClick={() => setScreen('dashboard')}>cancel</button>
             </div>
           </form>
         </div>
+
+        <footer className="home-footer">
+          <div className="home-footer-brand">
+            <img src={cardboundFooter} alt="Cardbound" className="footer-logo" />
+            <span className="home-footer-divider" aria-hidden="true" />
+            <span className="home-footer-text">Your personal trading ledger</span>
+          </div>
+
+          <div className="home-footer-meta">
+            <span>Not affiliated with Wizards of the Coast</span>
+            <span className="home-footer-divider" aria-hidden="true" />
+            <span>v1.0.0</span>
+          </div>
+        </footer>
       </div>
     )
   }
