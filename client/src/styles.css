@@ -410,6 +410,11 @@ button {
   border-radius: 999px;
 }
 
+.new-partner-shell .modal-card .ghost-button,
+.new-partner-shell .modal-card .ghost-button::first-letter {
+  font-size: 16px;
+}
+
 .auth-actions .ghost-button::first-letter,
 .modal-card .ghost-button::first-letter {
   display: inline-block;

@@ -13,12 +13,6 @@ const EMPTY_FORM = { displayName: '', username: '', password: '', confirmPasswor
 
 const partnerColorOptions = ['gold', 'blue', 'purple', 'rose', 'sage', 'amber', 'teal']
 
-const partnerCards = [
-  { id: 1, name: 'Elara Nightwhisper', initials: 'EN', color: 'blue', note: 'Met at FNM. Has lots of blue staples.', pending: 3, want: 2, have: 1, traded: 1, total: 40 },
-  { id: 2, name: 'Dorian Ashvale', initials: 'DA', color: 'purple', note: 'Commander player, mostly green and black.', pending: 2, want: 1, have: 1, traded: 1, total: 35 },
-  { id: 3, name: 'Mira Goldenleaf', initials: 'MG', color: 'amber', note: 'Competitive modern player.', pending: 2, want: 1, have: 0, traded: 1, total: 5 },
-]
-
 function getRandomPartnerColor() {
   const index = Math.floor(Math.random() * partnerColorOptions.length)
   return partnerColorOptions[index]
@@ -66,15 +60,23 @@ export default function App() {
   const [error, setError] = useState('')
   const [message, setMessage] = useState('')
   const [loading, setLoading] = useState(true)
-  const [selectedPartner, setSelectedPartner] = useState(partnerCards[0])
+  const [partnerCards, setPartnerCards] = useState([])
+  const [partnerSearch, setPartnerSearch] = useState('')
+  const [selectedPartner, setSelectedPartner] = useState(null)
   const [partnerForm, setPartnerForm] = useState({ name: '', notes: '' })
   const [currentUser, setCurrentUser] = useState(null)
 
   useEffect(() => {
     async function loadSession() {
-      const { data: { session: activeSession } } = await supabase.auth.getSession()
-      setSession(activeSession)
-      setLoading(false)
+      try {
+        const { data: { session: activeSession } } = await supabase.auth.getSession()
+        setSession(activeSession)
+        if (activeSession) setScreen('dashboard')
+      } catch (caught) {
+        setError(caught.message || 'Could not restore your session.')
+      } finally {
+        setLoading(false)
+      }
     }
 
     loadSession()
@@ -131,6 +133,49 @@ export default function App() {
     }
 
     syncUserProfile(session)
+    return () => {
+      active = false
+    }
+  }, [session])
+
+  useEffect(() => {
+    let active = true
+
+    async function loadPartners() {
+      setPartnerCards([])
+      setSelectedPartner(null)
+
+      if (!session?.user) return
+
+      const { data, error: partnersError } = await supabase
+        .from('partners')
+        .select('id, name, initials, notes, color, created_at')
+        .eq('owner_id', session.user.id)
+        .order('created_at', { ascending: false })
+
+      if (!active) return
+
+      if (partnersError) {
+        setError(`Could not load trading partners: ${partnersError.message}`)
+        return
+      }
+
+      const loadedPartners = (data || []).map((partner) => ({
+        ...partner,
+        color: partner.color || getRandomPartnerColor(),
+        note: partner.notes || 'New trading partner.',
+        pending: 0,
+        want: 0,
+        have: 0,
+        traded: 0,
+        total: 0,
+      }))
+
+      setPartnerCards(loadedPartners)
+      setSelectedPartner(loadedPartners[0] || null)
+    }
+
+    loadPartners()
     return () => {
       active = false
     }
@@ -339,7 +384,7 @@ export default function App() {
     setPartnerForm({ name: '', notes: '' })
   }
 
-  function handleSavePartner(event) {
+  async function handleSavePartner(event) {
     event.preventDefault()
 
     if (!partnerForm.name.trim()) {
@@ -347,24 +392,50 @@ export default function App() {
       return
     }
 
-    const newPartner = {
-      id: Date.now(),
-      name: partnerForm.name.trim(),
-      initials: partnerForm.name.trim().slice(0, 2).toUpperCase(),
-      color: getRandomPartnerColor(),
-      note: partnerForm.notes.trim() || 'New trading partner.',
-      pending: 1,
-      want: 0,
-      have: 0,
-      traded: 0,
-      total: 10,
+    if (!session?.user) {
+      setError('Please sign in before adding a trading partner.')
+      return
     }
 
-    partnerCards.unshift(newPartner)
-    setSelectedPartner(newPartner)
-    setPartnerForm({ name: '', notes: '' })
-    setScreen('dashboard')
+    setBusy(true)
     setError('')
+
+    try {
+      const name = partnerForm.name.trim()
+      const color = getRandomPartnerColor()
+      const { data, error: insertError } = await supabase
+        .from('partners')
+        .insert({
+          owner_id: session.user.id,
+          name,
+          initials: name.slice(0, 2).toUpperCase(),
+          notes: partnerForm.notes.trim(),
+          color,
+        })
+        .select('id, name, initials, notes, color, created_at')
+        .single()
+
+      if (insertError) throw insertError
+
+      const newPartner = {
+        ...data,
+        note: data.notes || 'New trading partner.',
+        pending: 0,
+        want: 0,
+        have: 0,
+        traded: 0,
+        total: 0,
+      }
+
+      setPartnerCards((current) => [newPartner, ...current])
+      setSelectedPartner(newPartner)
+      setPartnerForm({ name: '', notes: '' })
+      setScreen('dashboard')
+    } catch (caught) {
+      setError(caught.message || 'Could not save the trading partner.')
+    } finally {
+      setBusy(false)
+    }
   }
 
   if (loading) {
@@ -536,6 +607,10 @@ export default function App() {
 
   if (session && screen === 'dashboard') {
     const homeAccents = ['gold', 'blue', 'purple', 'rose', 'sage', 'amber', 'teal']
+    const searchTerm = partnerSearch.trim().toLowerCase()
+    const visiblePartners = partnerCards.filter((partner) =>
+      `${partner.name} ${partner.notes || partner.note || ''}`.toLowerCase().includes(searchTerm),
+    )
 
     return (
       <div className="app-shell scene-shell dashboard-shell">
@@ -571,11 +646,22 @@ export default function App() {
                 <line x1="21" y1="21" x2="16.65" y2="16.65" stroke="currentColor" strokeWidth="2" strokeLinecap="round" />
               </svg>
             </span>
-            <input type="text" placeholder="Search partners by name or notes..." />
+            <input
+              type="text"
+              value={partnerSearch}
+              onChange={(event) => setPartnerSearch(event.target.value)}
+              placeholder="Search partners by name or notes..."
+            />
           </div>
 
           <section className="home-grid">
-            {partnerCards.map((partner, index) => {
+            {partnerCards.length === 0 && (
+              <p className="home-empty-state">No trading partners yet. Add one to get started.</p>
+            )}
+            {partnerCards.length > 0 && visiblePartners.length === 0 && (
+              <p className="home-empty-state">No trading partners match your search.</p>
+            )}
+            {visiblePartners.map((partner, index) => {
               const accent = partner.color || homeAccents[index % homeAccents.length]
 
               return (
@@ -786,8 +872,10 @@ export default function App() {
             />
 
             <div className="modal-actions">
-              <button type="submit" className="primary-button">Save Partner</button>
-              <button type="button" className="ghost-button" onClick={() => setScreen('dashboard')}>cancel</button>
+              <button type="submit" className="primary-button" disabled={busy}>
+                {busy ? 'Saving...' : 'Save Partner'}
+              </button>
+              <button type="button" className="ghost-button" onClick={() => setScreen('dashboard')}>Cancel</button>
             </div>
           </form>
         </div>
