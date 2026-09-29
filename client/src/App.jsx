@@ -46,6 +46,160 @@ function getPartnerBorderColor(color) {
   return colors[color] || colors.gold
 }
 
+function formatScryfallPrice(price) {
+  if (price === null || price === undefined || price === '') return 'Price unavailable'
+
+  const amount = Number(price)
+  return Number.isFinite(amount)
+    ? new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD' }).format(amount)
+    : 'Price unavailable'
+}
+
+function ScryfallCardSearch({ label, onAddCard }) {
+  const [query, setQuery] = useState('')
+  const [cards, setCards] = useState([])
+  const [visibleCardCount, setVisibleCardCount] = useState(6)
+  const [hasMorePrints, setHasMorePrints] = useState(false)
+  const [nextPrintsPage, setNextPrintsPage] = useState(null)
+  const [loadingMorePrints, setLoadingMorePrints] = useState(false)
+  const [searching, setSearching] = useState(false)
+  const [searchError, setSearchError] = useState('')
+
+  useEffect(() => {
+    const searchTerm = query.trim()
+    setCards([])
+    setVisibleCardCount(6)
+    setHasMorePrints(false)
+    setNextPrintsPage(null)
+    setSearchError('')
+    setSearching(false)
+
+    if (searchTerm.length < 2) {
+      return undefined
+    }
+
+    const controller = new AbortController()
+    const timer = window.setTimeout(async () => {
+      setSearching(true)
+
+      try {
+        const response = await fetch(
+          `https://api.scryfall.com/cards/search?q=${encodeURIComponent(searchTerm)}&unique=prints&order=released&dir=desc`,
+          {
+            headers: { Accept: 'application/json' },
+            signal: controller.signal,
+          },
+        )
+        const result = await response.json()
+
+        if (response.status === 404) {
+          setCards([])
+          setHasMorePrints(false)
+          setNextPrintsPage(null)
+          setSearchError('No matching cards found.')
+          return
+        }
+
+        if (!response.ok) {
+          throw new Error(result.details || 'Scryfall search is unavailable right now.')
+        }
+
+        setCards(result.data || [])
+        setHasMorePrints(Boolean(result.has_more))
+        setNextPrintsPage(result.next_page || null)
+      } catch (caught) {
+        if (caught.name !== 'AbortError') {
+          setCards([])
+          setHasMorePrints(false)
+          setNextPrintsPage(null)
+          setSearchError(caught.message || 'Could not search Scryfall.')
+        }
+      } finally {
+        if (!controller.signal.aborted) setSearching(false)
+      }
+    }, 400)
+
+    return () => {
+      window.clearTimeout(timer)
+      controller.abort()
+    }
+  }, [query])
+
+  async function loadMorePrints() {
+    if (visibleCardCount < cards.length) {
+      setVisibleCardCount((current) => current + 6)
+      return
+    }
+
+    if (!nextPrintsPage || loadingMorePrints) return
+
+    setLoadingMorePrints(true)
+    try {
+      const response = await fetch(nextPrintsPage, { headers: { Accept: 'application/json' } })
+      const result = await response.json()
+
+      if (!response.ok) {
+        throw new Error(result.details || 'Could not load more printings.')
+      }
+
+      const nextPageCards = result.data || []
+      setCards((current) => [...current, ...nextPageCards])
+      setVisibleCardCount((current) => current + 6)
+      setHasMorePrints(Boolean(result.has_more))
+      setNextPrintsPage(result.next_page || null)
+    } catch (caught) {
+      setSearchError(caught.message || 'Could not load more printings.')
+    } finally {
+      setLoadingMorePrints(false)
+    }
+  }
+
+  return (
+    <div className="scryfall-search">
+      <label className="scryfall-search-label">
+        {label}
+        <input
+          type="search"
+          value={query}
+          onChange={(event) => setQuery(event.target.value)}
+          placeholder="Search Magic cards..."
+          autoComplete="off"
+        />
+      </label>
+      {searching && <p className="scryfall-search-status" role="status">Searching cards...</p>}
+      {searchError && <p className="scryfall-search-status" role="status">{searchError}</p>}
+      {cards.length > 0 && (
+        <div className="scryfall-results" aria-label="Scryfall card search results">
+          {cards.slice(0, visibleCardCount).map((card) => {
+            const image = card.image_uris?.small || card.card_faces?.[0]?.image_uris?.small
+
+            return (
+              <article className="scryfall-result" key={card.id}>
+                {image && <img src={image} alt={`${card.name} Magic: The Gathering card`} loading="lazy" />}
+                <div className="scryfall-result-info">
+                  <strong>{card.name}</strong>
+                  <span>{card.set_name} ({card.set.toUpperCase()}) · #{card.collector_number}</span>
+                  <span>{card.rarity} · {card.released_at}</span>
+                  <span>{card.type_line}</span>
+                  <span className="scryfall-price">USD {formatScryfallPrice(card.prices?.usd)}</span>
+                  {card.prices?.usd_foil && <span className="scryfall-price">Foil {formatScryfallPrice(card.prices.usd_foil)}</span>}
+                </div>
+                <button type="button" onClick={() => onAddCard(card)}>Add print</button>
+              </article>
+            )
+          })}
+        </div>
+      )}
+      <p className="scryfall-attribution">Card data and unmodified images via Scryfall.</p>
+      {(visibleCardCount < cards.length || hasMorePrints) && (
+        <button type="button" className="scryfall-more-button" onClick={loadMorePrints} disabled={loadingMorePrints}>
+          {loadingMorePrints ? 'Loading...' : 'Load more prints'}
+        </button>
+      )}
+    </div>
+  )
+}
+
 const historyRows = [
   { partner: 'Elara Nightwhisper', card: 'Snapcaster Mage', status: 'Received', date: 'Aug 15', color: 'blue' },
   { partner: 'Elara Nightwhisper', card: 'Swords to Plowshares', status: 'Gave away', date: 'Aug 15', color: 'white' },
@@ -63,6 +217,7 @@ export default function App() {
   const [partnerCards, setPartnerCards] = useState([])
   const [partnerSearch, setPartnerSearch] = useState('')
   const [selectedPartner, setSelectedPartner] = useState(null)
+  const [tradeCardsByPartner, setTradeCardsByPartner] = useState({})
   const [partnerForm, setPartnerForm] = useState({ name: '', notes: '' })
   const [currentUser, setCurrentUser] = useState(null)
 
@@ -438,6 +593,84 @@ export default function App() {
     }
   }
 
+  function addTradeCard(listName, card) {
+    if (!selectedPartner) return
+
+    const cardEntry = {
+      id: card.id,
+      name: card.name,
+      setName: card.set_name,
+      setCode: card.set,
+      collectorNumber: card.collector_number,
+      rarity: card.rarity,
+      typeLine: card.type_line,
+      colors: card.colors || [],
+      image: card.image_uris?.small || card.card_faces?.[0]?.image_uris?.small || '',
+      usdPrice: card.prices?.usd ?? null,
+      usdFoilPrice: card.prices?.usd_foil ?? null,
+      quantity: 1,
+    }
+
+    setTradeCardsByPartner((current) => {
+      const lists = current[selectedPartner.id] || { fromPartner: [], fromUser: [] }
+      const existingCard = lists[listName].find((item) => item.id === cardEntry.id)
+
+      if (existingCard) {
+        return {
+          ...current,
+          [selectedPartner.id]: {
+            ...lists,
+            [listName]: lists[listName].map((item) =>
+              item.id === cardEntry.id ? { ...item, quantity: item.quantity + 1 } : item,
+            ),
+          },
+        }
+      }
+
+      return {
+        ...current,
+        [selectedPartner.id]: {
+          ...lists,
+          [listName]: [...lists[listName], cardEntry],
+        },
+      }
+    })
+  }
+
+  function changeTradeCardQuantity(listName, cardId, amount) {
+    if (!selectedPartner) return
+
+    setTradeCardsByPartner((current) => {
+      const lists = current[selectedPartner.id] || { fromPartner: [], fromUser: [] }
+      return {
+        ...current,
+        [selectedPartner.id]: {
+          ...lists,
+          [listName]: lists[listName].map((card) =>
+            card.id === cardId
+              ? { ...card, quantity: Math.max(1, card.quantity + amount) }
+              : card,
+          ),
+        },
+      }
+    })
+  }
+
+  function removeTradeCard(listName, cardId) {
+    if (!selectedPartner) return
+
+    setTradeCardsByPartner((current) => {
+      const lists = current[selectedPartner.id] || { fromPartner: [], fromUser: [] }
+      return {
+        ...current,
+        [selectedPartner.id]: {
+          ...lists,
+          [listName]: lists[listName].filter((card) => card.id !== cardId),
+        },
+      }
+    })
+  }
+
   if (loading) {
     return (
       <div className="app-shell scene-shell">
@@ -743,6 +976,8 @@ export default function App() {
   }
 
   if (screen === 'trade' && selectedPartner) {
+    const partnerTradeCards = tradeCardsByPartner[selectedPartner.id] || { fromPartner: [], fromUser: [] }
+
     return (
       <div className="app-shell scene-shell dashboard-shell">
         <header className="top-bar">
@@ -767,18 +1002,59 @@ export default function App() {
           <div className="trade-columns">
             <section className="trade-panel">
               <div className="panel-heading">I WANT · FROM {selectedPartner.name.toUpperCase()}</div>
+              <ScryfallCardSearch label="Find a card" onAddCard={(card) => addTradeCard('fromPartner', card)} />
               <div className="trade-list">
-                <div className="trade-item active"><span>Force of Will</span><span className="badge blue">Blue</span><button type="button">✓</button></div>
-                <div className="trade-item"><span> Tarmogoyf </span><span className="badge green">Green</span><button type="button">✓</button></div>
-                <div className="trade-item"><span> Snapcaster Mage </span><span className="badge blue">Blue</span><button type="button">✓</button></div>
+                {partnerTradeCards.fromPartner.map((card) => (
+                  <div className="trade-item" key={card.id}>
+                    {card.image && <img className="trade-card-image" src={card.image} alt={`${card.name} card`} loading="lazy" />}
+                    <div className="trade-card-info">
+                      <strong>{card.name}</strong>
+                      <span>{card.setName} ({card.setCode.toUpperCase()}) · #{card.collectorNumber} · {card.rarity}</span>
+                      <span className="trade-card-price">
+                        USD {formatScryfallPrice(card.usdPrice)}
+                        {card.usdPrice !== null && ` · Total ${formatScryfallPrice(Number(card.usdPrice) * card.quantity)}`}
+                      </span>
+                      {card.usdFoilPrice && <span className="trade-card-price">Foil {formatScryfallPrice(card.usdFoilPrice)}</span>}
+                    </div>
+                    <span className="badge">{card.colors.length ? card.colors.join('/') : 'Colorless'}</span>
+                    <div className="trade-quantity" aria-label={`${card.quantity} copies`}>
+                      <button type="button" aria-label={`Decrease ${card.name} quantity`} disabled={card.quantity <= 1} onClick={() => changeTradeCardQuantity('fromPartner', card.id, -1)}>-</button>
+                      <span>{card.quantity}</span>
+                      <button type="button" aria-label={`Increase ${card.name} quantity`} onClick={() => changeTradeCardQuantity('fromPartner', card.id, 1)}>+</button>
+                    </div>
+                    <button type="button" aria-label={`Remove ${card.name}`} onClick={() => removeTradeCard('fromPartner', card.id)}>×</button>
+                  </div>
+                ))}
+                {partnerTradeCards.fromPartner.length === 0 && <p className="trade-empty">Search for cards this partner has.</p>}
               </div>
             </section>
 
             <section className="trade-panel">
               <div className="panel-heading">THEY WANT · FROM ME</div>
+              <ScryfallCardSearch label="Find a card" onAddCard={(card) => addTradeCard('fromUser', card)} />
               <div className="trade-list">
-                <div className="trade-item active"><span>Lightning Bolt</span><span className="badge red">Red</span><button type="button">✓</button></div>
-                <div className="trade-item"><span>Swords to Plowshares</span><span className="badge white">White</span><button type="button">✓</button></div>
+                {partnerTradeCards.fromUser.map((card) => (
+                  <div className="trade-item" key={card.id}>
+                    {card.image && <img className="trade-card-image" src={card.image} alt={`${card.name} card`} loading="lazy" />}
+                    <div className="trade-card-info">
+                      <strong>{card.name}</strong>
+                      <span>{card.setName} ({card.setCode.toUpperCase()}) · #{card.collectorNumber} · {card.rarity}</span>
+                      <span className="trade-card-price">
+                        USD {formatScryfallPrice(card.usdPrice)}
+                        {card.usdPrice !== null && ` · Total ${formatScryfallPrice(Number(card.usdPrice) * card.quantity)}`}
+                      </span>
+                      {card.usdFoilPrice && <span className="trade-card-price">Foil {formatScryfallPrice(card.usdFoilPrice)}</span>}
+                    </div>
+                    <span className="badge">{card.colors.length ? card.colors.join('/') : 'Colorless'}</span>
+                    <div className="trade-quantity" aria-label={`${card.quantity} copies`}>
+                      <button type="button" aria-label={`Decrease ${card.name} quantity`} disabled={card.quantity <= 1} onClick={() => changeTradeCardQuantity('fromUser', card.id, -1)}>-</button>
+                      <span>{card.quantity}</span>
+                      <button type="button" aria-label={`Increase ${card.name} quantity`} onClick={() => changeTradeCardQuantity('fromUser', card.id, 1)}>+</button>
+                    </div>
+                    <button type="button" aria-label={`Remove ${card.name}`} onClick={() => removeTradeCard('fromUser', card.id)}>×</button>
+                  </div>
+                ))}
+                {partnerTradeCards.fromUser.length === 0 && <p className="trade-empty">Search for cards you can offer.</p>}
               </div>
             </section>
           </div>
