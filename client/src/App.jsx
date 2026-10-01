@@ -1,4 +1,5 @@
 import { useEffect, useState } from 'react'
+import { createPortal } from 'react-dom'
 import { supabase } from './lib/supabase.js'
 import userIcon from './assets/user_icon.svg'
 import tradeIcon from './assets/trade_icon.svg'
@@ -6,8 +7,10 @@ import confirmIcon from './assets/confirm_icon.svg'
 import smallStar from './assets/small_star.svg'
 import goldDivider from './assets/GoldDivider.svg'
 import dividerAsset from './assets/divider.svg'
+import cardboundLogo from './assets/cardbound-logo.svg'
 import cardboundTop from './assets/cardbound_top.svg'
 import cardboundFooter from './assets/cardbound_footer.svg'
+import circleTrade from './assets/circle_trade.svg'
 
 const EMPTY_FORM = { displayName: '', username: '', password: '', confirmPassword: '' }
 
@@ -46,6 +49,47 @@ function getPartnerBorderColor(color) {
   return colors[color] || colors.gold
 }
 
+function getCardManaColorClass(colors = []) {
+  if (colors.length > 1) return 'multicolor'
+
+  const manaColorClasses = { W: 'white', U: 'blue', B: 'black', R: 'red', G: 'green' }
+  return manaColorClasses[colors[0]] || 'colorless'
+}
+
+function getTradeCardCounts(cards = []) {
+  const counts = cards.reduce((current, card) => {
+    const quantity = Number(card.quantity) || 0
+    return {
+      total: current.total + quantity,
+      pending: current.pending + (card.isTraded ? 0 : quantity),
+      traded: current.traded + (card.isTraded ? quantity : 0),
+    }
+  }, { total: 0, pending: 0, traded: 0 })
+
+  return {
+    ...counts,
+    progress: counts.total ? Math.round((counts.traded / counts.total) * 100) : 0,
+  }
+}
+
+function getPartnerTradeCounts(cardLists = {}) {
+  const fromPartner = getTradeCardCounts(cardLists.fromPartner || [])
+  const fromUser = getTradeCardCounts(cardLists.fromUser || [])
+  const total = fromPartner.total + fromUser.total
+  const traded = fromPartner.traded + fromUser.traded
+
+  return {
+    fromPartner,
+    fromUser,
+    pending: fromPartner.pending + fromUser.pending,
+    traded,
+    total,
+    want: fromPartner.total,
+    have: fromUser.total,
+    progress: total ? Math.round((traded / total) * 100) : 0,
+  }
+}
+
 function formatScryfallPrice(price) {
   if (price === null || price === undefined || price === '') return 'Price unavailable'
 
@@ -53,6 +97,105 @@ function formatScryfallPrice(price) {
   return Number.isFinite(amount)
     ? new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD' }).format(amount)
     : 'Price unavailable'
+}
+
+function CardImageButton({ name, thumbnail, fullImage, compact = false }) {
+  const [hovered, setHovered] = useState(false)
+  const [hoverPosition, setHoverPosition] = useState(null)
+  const [previewOpen, setPreviewOpen] = useState(false)
+
+  useEffect(() => {
+    if (!previewOpen) return undefined
+
+    function closeOnEscape(event) {
+      if (event.key === 'Escape') setPreviewOpen(false)
+    }
+
+    window.addEventListener('keydown', closeOnEscape)
+    return () => window.removeEventListener('keydown', closeOnEscape)
+  }, [previewOpen])
+
+  if (!thumbnail) return null
+
+  const previewImage = fullImage || thumbnail
+
+  function positionHoverPreview(clientX, clientY) {
+    const margin = 12
+    const gap = 16
+    const previewWidth = Math.min(230, window.innerWidth * 0.56) + 16
+    const previewHeight = Math.min(window.innerHeight * 0.68, previewWidth * 1.45) + 16
+    const left = clientX + gap + previewWidth <= window.innerWidth - margin
+      ? clientX + gap
+      : Math.max(margin, clientX - previewWidth - gap)
+    const top = clientY + gap + previewHeight <= window.innerHeight - margin
+      ? clientY + gap
+      : Math.max(margin, Math.min(clientY - previewHeight / 2, window.innerHeight - previewHeight - margin))
+
+    setHoverPosition({ left, top })
+  }
+
+  function handleImageFocus(event) {
+    const bounds = event.currentTarget.getBoundingClientRect()
+    setHovered(true)
+    positionHoverPreview(bounds.right, bounds.top + bounds.height / 2)
+  }
+
+  return (
+    <>
+      <button
+        type="button"
+        className={`card-image-trigger${compact ? ' compact' : ''}`}
+        aria-label={`Preview ${name}`}
+        aria-haspopup="dialog"
+        aria-expanded={previewOpen}
+        onMouseEnter={(event) => {
+          setHovered(true)
+          positionHoverPreview(event.clientX, event.clientY)
+        }}
+        onMouseMove={(event) => positionHoverPreview(event.clientX, event.clientY)}
+        onMouseLeave={() => setHovered(false)}
+        onFocus={handleImageFocus}
+        onBlur={() => setHovered(false)}
+        onClick={() => setPreviewOpen(true)}
+      >
+        <img
+          className={compact ? 'card-search-thumbnail' : 'trade-card-image'}
+          src={thumbnail}
+          alt={`${name} Magic: The Gathering card`}
+          loading="lazy"
+        />
+      </button>
+      {hovered && !previewOpen && createPortal(
+        <div className="card-hover-preview" style={hoverPosition || undefined} aria-hidden="true">
+          <img src={previewImage} alt="" />
+        </div>,
+        document.body,
+      )}
+      {previewOpen && createPortal(
+        <div className="card-preview-backdrop" onClick={() => setPreviewOpen(false)}>
+          <div
+            className="card-preview-dialog"
+            role="dialog"
+            aria-modal="true"
+            aria-label={`${name} card preview`}
+            onClick={(event) => event.stopPropagation()}
+          >
+            <button
+              type="button"
+              className="card-preview-close"
+              aria-label="Close card preview"
+              onClick={() => setPreviewOpen(false)}
+            >
+              ×
+            </button>
+            <img className="card-preview-full-image" src={previewImage} alt={`${name} Magic: The Gathering card`} />
+            <div className="card-preview-caption">{name}</div>
+          </div>
+        </div>,
+        document.body,
+      )}
+    </>
+  )
 }
 
 function ScryfallCardSearch({ label, onAddCard }) {
@@ -158,24 +301,39 @@ function ScryfallCardSearch({ label, onAddCard }) {
     <div className="scryfall-search">
       <label className="scryfall-search-label">
         {label}
-        <input
-          type="search"
-          value={query}
-          onChange={(event) => setQuery(event.target.value)}
-          placeholder="Search Magic cards..."
-          autoComplete="off"
-        />
+        <div className="scryfall-search-field">
+          <span className="home-search-icon" aria-hidden="true">
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+              <circle cx="11" cy="11" r="7" stroke="currentColor" strokeWidth="2" />
+              <line x1="21" y1="21" x2="16.65" y2="16.65" stroke="currentColor" strokeWidth="2" strokeLinecap="round" />
+            </svg>
+          </span>
+          <input
+            type="search"
+            value={query}
+            onChange={(event) => setQuery(event.target.value)}
+            placeholder="Search Magic cards..."
+            autoComplete="off"
+          />
+        </div>
       </label>
       {searching && <p className="scryfall-search-status" role="status">Searching cards...</p>}
       {searchError && <p className="scryfall-search-status" role="status">{searchError}</p>}
       {cards.length > 0 && (
         <div className="scryfall-results" aria-label="Scryfall card search results">
           {cards.slice(0, visibleCardCount).map((card) => {
-            const image = card.image_uris?.small || card.card_faces?.[0]?.image_uris?.small
+            const thumbnail = card.image_uris?.small || card.card_faces?.[0]?.image_uris?.small
+            const fullImage = card.image_uris?.large
+              || card.card_faces?.[0]?.image_uris?.large
+              || card.image_uris?.png
+              || card.card_faces?.[0]?.image_uris?.png
+              || card.image_uris?.normal
+              || card.card_faces?.[0]?.image_uris?.normal
+              || thumbnail
 
             return (
               <article className="scryfall-result" key={card.id}>
-                {image && <img src={image} alt={`${card.name} Magic: The Gathering card`} loading="lazy" />}
+                <CardImageButton name={card.name} thumbnail={thumbnail} fullImage={fullImage} compact />
                 <div className="scryfall-result-info">
                   <strong>{card.name}</strong>
                   <span>{card.set_name} ({card.set.toUpperCase()}) · #{card.collector_number}</span>
@@ -200,12 +358,6 @@ function ScryfallCardSearch({ label, onAddCard }) {
   )
 }
 
-const historyRows = [
-  { partner: 'Elara Nightwhisper', card: 'Snapcaster Mage', status: 'Received', date: 'Aug 15', color: 'blue' },
-  { partner: 'Elara Nightwhisper', card: 'Swords to Plowshares', status: 'Gave away', date: 'Aug 15', color: 'white' },
-  { partner: 'Dorian Ashvale', card: 'Doubling Season', status: 'Received', date: 'Jul 28', color: 'green' },
-]
-
 export default function App() {
   const [screen, setScreen] = useState('welcome')
   const [session, setSession] = useState(null)
@@ -216,6 +368,7 @@ export default function App() {
   const [loading, setLoading] = useState(true)
   const [partnerCards, setPartnerCards] = useState([])
   const [partnerSearch, setPartnerSearch] = useState('')
+  const [historySearch, setHistorySearch] = useState('')
   const [selectedPartner, setSelectedPartner] = useState(null)
   const [tradeCardsByPartner, setTradeCardsByPartner] = useState({})
   const [partnerForm, setPartnerForm] = useState({ name: '', notes: '' })
@@ -606,9 +759,17 @@ export default function App() {
       typeLine: card.type_line,
       colors: card.colors || [],
       image: card.image_uris?.small || card.card_faces?.[0]?.image_uris?.small || '',
+      normalImage: card.image_uris?.large
+        || card.card_faces?.[0]?.image_uris?.large
+        || card.image_uris?.png
+        || card.card_faces?.[0]?.image_uris?.png
+        || card.image_uris?.normal
+        || card.card_faces?.[0]?.image_uris?.normal
+        || '',
       usdPrice: card.prices?.usd ?? null,
       usdFoilPrice: card.prices?.usd_foil ?? null,
       quantity: 1,
+      isTraded: false,
     }
 
     setTradeCardsByPartner((current) => {
@@ -656,6 +817,29 @@ export default function App() {
     })
   }
 
+  function toggleTradeCardTraded(listName, cardId) {
+    if (!selectedPartner) return
+
+    setTradeCardsByPartner((current) => {
+      const lists = current[selectedPartner.id] || { fromPartner: [], fromUser: [] }
+      return {
+        ...current,
+        [selectedPartner.id]: {
+          ...lists,
+          [listName]: lists[listName].map((card) =>
+            card.id === cardId
+              ? {
+                  ...card,
+                  isTraded: !card.isTraded,
+                  tradedAt: card.isTraded ? null : new Date().toISOString(),
+                }
+              : card,
+          ),
+        },
+      }
+    })
+  }
+
   function removeTradeCard(listName, cardId) {
     if (!selectedPartner) return
 
@@ -685,7 +869,7 @@ export default function App() {
     return (
       <div className="app-shell scene-shell">
         <main className="welcome-panel">
-          <h1>CARDBOUND</h1>
+          <img src={cardboundLogo} alt="Cardbound" className="welcome-logo" />
           <div className="welcome-divider" aria-hidden="true">
             <img src={dividerAsset} alt="" className="brand-divider" />
           </div>
@@ -727,10 +911,7 @@ export default function App() {
     return (
       <div className="app-shell scene-shell">
         <div className="auth-brand-wrap">
-          <div className="auth-brand" aria-label="Cardbound">
-            <span className="auth-brand-letter">C</span>
-            <span className="auth-brand-rest">ARDBOUND</span>
-          </div>
+          <img src={cardboundLogo} alt="Cardbound" className="auth-brand-logo" />
           <div className="auth-brand-divider" aria-hidden="true">
             <img src={dividerAsset} alt="" className="brand-divider" />
           </div>
@@ -841,9 +1022,15 @@ export default function App() {
   if (session && screen === 'dashboard') {
     const homeAccents = ['gold', 'blue', 'purple', 'rose', 'sage', 'amber', 'teal']
     const searchTerm = partnerSearch.trim().toLowerCase()
-    const visiblePartners = partnerCards.filter((partner) =>
+    const dashboardPartners = partnerCards.map((partner) => ({
+      ...partner,
+      ...getPartnerTradeCounts(tradeCardsByPartner[partner.id]),
+    }))
+    const visiblePartners = dashboardPartners.filter((partner) =>
       `${partner.name} ${partner.notes || partner.note || ''}`.toLowerCase().includes(searchTerm),
     )
+    const dashboardPendingCount = dashboardPartners.reduce((total, partner) => total + partner.pending, 0)
+    const dashboardTradedCount = dashboardPartners.reduce((total, partner) => total + partner.traded, 0)
 
     return (
       <div className="app-shell scene-shell dashboard-shell">
@@ -862,9 +1049,9 @@ export default function App() {
           <div className="home-stats-bar">
             <span className="home-stat">Partners <strong>{partnerCards.length}</strong></span>
             <span className="home-stat-divider" />
-            <span className="home-stat">Pending <strong>7</strong></span>
+            <span className="home-stat">Pending <strong>{dashboardPendingCount}</strong></span>
             <span className="home-stat-divider" />
-            <span className="home-stat">Traded <strong>3</strong></span>
+            <span className="home-stat">Traded <strong>{dashboardTradedCount}</strong></span>
           </div>
         </header>
 
@@ -944,10 +1131,10 @@ export default function App() {
 
                     <div className="home-progress-label">
                       <span>Trade Progress</span>
-                      <span>{partner.total}%</span>
+                      <span>{partner.progress}%</span>
                     </div>
                     <div className="home-progress-wrap">
-                      <div className="home-progress-bar" style={{ width: `${partner.total}%`, background: getPartnerGradient(partner.color) }} />
+                      <div className="home-progress-bar" style={{ width: `${partner.progress}%`, background: getPartnerGradient(partner.color) }} />
                     </div>
                   </div>
 
@@ -977,36 +1164,69 @@ export default function App() {
 
   if (screen === 'trade' && selectedPartner) {
     const partnerTradeCards = tradeCardsByPartner[selectedPartner.id] || { fromPartner: [], fromUser: [] }
+    const partnerCounts = getPartnerTradeCounts(partnerTradeCards)
+    const { fromPartner: fromPartnerCounts, fromUser: fromUserCounts } = partnerCounts
+    const { total: totalCardCount, pending: pendingCardCount, traded: tradedCardCount, progress: tradeProgress } = partnerCounts
 
     return (
-      <div className="app-shell scene-shell dashboard-shell">
-        <header className="top-bar">
+      <div className="app-shell scene-shell trade-shell">
+        <header className="top-bar trade-top-bar">
           <img src={cardboundTop} alt="Cardbound" className="topbar-logo" />
-          <button type="button" className="mini-button ghost" onClick={() => setScreen('dashboard')}>Back</button>
+          <button type="button" className="mini-button ghost trade-back-button" onClick={() => setScreen('dashboard')}>← Back</button>
         </header>
 
-        <main className="trade-page">
-          <div className="trade-header">
-            <div className="trade-name-block">
+        <section className="trade-partner-bar">
+          <div className="trade-partner-overview">
+            <span className="trade-overline"><span aria-hidden="true">◇</span> Trading with</span>
+            <div className="trade-identity">
               <div className={`mini-avatar large ${selectedPartner.color}`}>{selectedPartner.initials}</div>
-              <div>
+              <div className="trade-identity-copy">
                 <div className="trade-title">{selectedPartner.name}</div>
-                <div className="trade-meta">{selectedPartner.pending} pending · {selectedPartner.traded} traded · {selectedPartner.want} cards</div>
+                <span className="trade-name-divider" aria-hidden="true" />
+                <div className="trade-meta">
+                  <span><strong>{pendingCardCount}</strong> pending</span>
+                  <i aria-hidden="true" />
+                  <span><strong>{tradedCardCount}</strong> traded</span>
+                  <i aria-hidden="true" />
+                  <span><strong>{totalCardCount}</strong> total cards</span>
+                </div>
               </div>
             </div>
+          </div>
+          <div className="trade-progress-summary">
+            <div><span>Progress</span><strong>{tradeProgress}%</strong></div>
             <div className="progress-wrap progress-tight">
-              <div className="progress-bar" style={{ width: `${selectedPartner.total}%` }} />
+              <div className="progress-bar" style={{ width: `${tradeProgress}%` }} />
             </div>
           </div>
+        </section>
 
-          <div className="trade-columns">
+        <main className="trade-page">
+          <div
+            className="trade-columns"
+            style={{
+              '--trade-partner-accent': getPartnerBorderColor(selectedPartner.color),
+              '--trade-partner-gradient': getPartnerGradient(selectedPartner.color),
+            }}
+          >
             <section className="trade-panel">
-              <div className="panel-heading">I WANT · FROM {selectedPartner.name.toUpperCase()}</div>
+              <div className="trade-panel-heading">
+                <div className="panel-heading panel-heading-want">I WANT · FROM {selectedPartner.name.toUpperCase()}</div>
+                <div className="trade-panel-count"><strong>{fromPartnerCounts.total}</strong><small>Cards</small></div>
+              </div>
+              <div className="trade-panel-stats">
+                <span><strong>{fromPartnerCounts.pending}</strong> Pending</span>
+                <i aria-hidden="true" />
+                <span><strong>{fromPartnerCounts.traded}</strong> Traded</span>
+              </div>
+              <div className="trade-panel-progress trade-panel-progress-want">
+                <span style={{ width: `${fromPartnerCounts.progress}%` }} />
+              </div>
               <ScryfallCardSearch label="Find a card" onAddCard={(card) => addTradeCard('fromPartner', card)} />
               <div className="trade-list">
                 {partnerTradeCards.fromPartner.map((card) => (
-                  <div className="trade-item" key={card.id}>
-                    {card.image && <img className="trade-card-image" src={card.image} alt={`${card.name} card`} loading="lazy" />}
+                  <div className={`trade-item${card.isTraded ? ' is-traded' : ''}`} key={card.id}>
+                    <CardImageButton name={card.name} thumbnail={card.image} fullImage={card.normalImage} />
                     <div className="trade-card-info">
                       <strong>{card.name}</strong>
                       <span>{card.setName} ({card.setCode.toUpperCase()}) · #{card.collectorNumber} · {card.rarity}</span>
@@ -1016,12 +1236,26 @@ export default function App() {
                       </span>
                       {card.usdFoilPrice && <span className="trade-card-price">Foil {formatScryfallPrice(card.usdFoilPrice)}</span>}
                     </div>
+                    <span
+                      className={`trade-card-color-indicator ${getCardManaColorClass(card.colors)}`}
+                      role="img"
+                      aria-label={`${getCardManaColorClass(card.colors)} card color`}
+                    />
                     <span className="badge">{card.colors.length ? card.colors.join('/') : 'Colorless'}</span>
                     <div className="trade-quantity" aria-label={`${card.quantity} copies`}>
                       <button type="button" aria-label={`Decrease ${card.name} quantity`} disabled={card.quantity <= 1} onClick={() => changeTradeCardQuantity('fromPartner', card.id, -1)}>-</button>
                       <span>{card.quantity}</span>
                       <button type="button" aria-label={`Increase ${card.name} quantity`} onClick={() => changeTradeCardQuantity('fromPartner', card.id, 1)}>+</button>
                     </div>
+                    <button
+                      type="button"
+                      className={`trade-card-traded-button${card.isTraded ? ' selected' : ''}`}
+                      aria-label={`${card.isTraded ? 'Unmark' : 'Mark'} ${card.name} as traded`}
+                      aria-pressed={Boolean(card.isTraded)}
+                      onClick={() => toggleTradeCardTraded('fromPartner', card.id)}
+                    >
+                      ✓
+                    </button>
                     <button type="button" aria-label={`Remove ${card.name}`} onClick={() => removeTradeCard('fromPartner', card.id)}>×</button>
                   </div>
                 ))}
@@ -1029,13 +1263,30 @@ export default function App() {
               </div>
             </section>
 
+            <div className="trade-center-divider" aria-hidden="true">
+              <span className="trade-divider-marker" />
+              <span className="trade-swap-mark"><img src={circleTrade} alt="" /></span>
+              <span className="trade-divider-marker" />
+            </div>
+
             <section className="trade-panel">
-              <div className="panel-heading">THEY WANT · FROM ME</div>
+              <div className="trade-panel-heading">
+                <div className="panel-heading panel-heading-they-want">THEY WANT · FROM ME</div>
+                <div className="trade-panel-count"><strong>{fromUserCounts.total}</strong><small>Cards</small></div>
+              </div>
+              <div className="trade-panel-stats">
+                <span><strong>{fromUserCounts.pending}</strong> Pending</span>
+                <i aria-hidden="true" />
+                <span><strong>{fromUserCounts.traded}</strong> Traded</span>
+              </div>
+              <div className="trade-panel-progress trade-panel-progress-they-want">
+                <span style={{ width: `${fromUserCounts.progress}%` }} />
+              </div>
               <ScryfallCardSearch label="Find a card" onAddCard={(card) => addTradeCard('fromUser', card)} />
               <div className="trade-list">
                 {partnerTradeCards.fromUser.map((card) => (
-                  <div className="trade-item" key={card.id}>
-                    {card.image && <img className="trade-card-image" src={card.image} alt={`${card.name} card`} loading="lazy" />}
+                  <div className={`trade-item${card.isTraded ? ' is-traded' : ''}`} key={card.id}>
+                    <CardImageButton name={card.name} thumbnail={card.image} fullImage={card.normalImage} />
                     <div className="trade-card-info">
                       <strong>{card.name}</strong>
                       <span>{card.setName} ({card.setCode.toUpperCase()}) · #{card.collectorNumber} · {card.rarity}</span>
@@ -1045,12 +1296,26 @@ export default function App() {
                       </span>
                       {card.usdFoilPrice && <span className="trade-card-price">Foil {formatScryfallPrice(card.usdFoilPrice)}</span>}
                     </div>
+                    <span
+                      className={`trade-card-color-indicator ${getCardManaColorClass(card.colors)}`}
+                      role="img"
+                      aria-label={`${getCardManaColorClass(card.colors)} card color`}
+                    />
                     <span className="badge">{card.colors.length ? card.colors.join('/') : 'Colorless'}</span>
                     <div className="trade-quantity" aria-label={`${card.quantity} copies`}>
                       <button type="button" aria-label={`Decrease ${card.name} quantity`} disabled={card.quantity <= 1} onClick={() => changeTradeCardQuantity('fromUser', card.id, -1)}>-</button>
                       <span>{card.quantity}</span>
                       <button type="button" aria-label={`Increase ${card.name} quantity`} onClick={() => changeTradeCardQuantity('fromUser', card.id, 1)}>+</button>
                     </div>
+                    <button
+                      type="button"
+                      className={`trade-card-traded-button${card.isTraded ? ' selected' : ''}`}
+                      aria-label={`${card.isTraded ? 'Unmark' : 'Mark'} ${card.name} as traded`}
+                      aria-pressed={Boolean(card.isTraded)}
+                      onClick={() => toggleTradeCardTraded('fromUser', card.id)}
+                    >
+                      ✓
+                    </button>
                     <button type="button" aria-label={`Remove ${card.name}`} onClick={() => removeTradeCard('fromUser', card.id)}>×</button>
                   </div>
                 ))}
@@ -1066,6 +1331,7 @@ export default function App() {
             <span>Red</span>
             <span>Green</span>
             <span>Colorless</span>
+            <span>Multicolor</span>
           </div>
         </main>
       </div>
@@ -1073,43 +1339,128 @@ export default function App() {
   }
 
   if (screen === 'history') {
+    const historyGroups = partnerCards.map((partner) => {
+      const partnerLists = tradeCardsByPartner[partner.id] || { fromPartner: [], fromUser: [] }
+      const records = [
+        ...partnerLists.fromPartner.filter((card) => card.isTraded).map((card) => ({ ...card, direction: 'received' })),
+        ...partnerLists.fromUser.filter((card) => card.isTraded).map((card) => ({ ...card, direction: 'gave-away' })),
+      ].sort((left, right) => new Date(right.tradedAt || 0) - new Date(left.tradedAt || 0))
+
+      return {
+        partner,
+        records,
+        total: records.reduce((sum, record) => sum + (Number(record.quantity) || 0), 0),
+      }
+    }).filter((group) => group.records.length > 0)
+
+    const allHistoryRecords = historyGroups.flatMap((group) => group.records)
+    const totalHistoryCount = allHistoryRecords.reduce((sum, record) => sum + (Number(record.quantity) || 0), 0)
+    const receivedCount = allHistoryRecords
+      .filter((record) => record.direction === 'received')
+      .reduce((sum, record) => sum + (Number(record.quantity) || 0), 0)
+    const gaveAwayCount = allHistoryRecords
+      .filter((record) => record.direction === 'gave-away')
+      .reduce((sum, record) => sum + (Number(record.quantity) || 0), 0)
+    const mostActiveGroup = [...historyGroups].sort((left, right) => right.total - left.total)[0]
+    const mostActivePartner = mostActiveGroup?.total ? mostActiveGroup.partner.name.split(' ')[0] : '—'
+    const searchTerm = historySearch.trim().toLowerCase()
+    const visibleHistoryGroups = historyGroups.map((group) => {
+      const partnerMatches = group.partner.name.toLowerCase().includes(searchTerm)
+      const records = !searchTerm || partnerMatches
+        ? group.records
+        : group.records.filter((record) =>
+          `${record.name} ${record.setName} ${record.setCode}`.toLowerCase().includes(searchTerm),
+        )
+
+      return { ...group, records, partnerMatches }
+    }).filter((group) => !searchTerm || group.partnerMatches || group.records.length > 0)
+
     return (
-      <div className="app-shell scene-shell dashboard-shell">
-        <header className="top-bar">
+      <div className="app-shell scene-shell dashboard-shell history-shell">
+        <header className="top-bar history-top-bar">
           <img src={cardboundTop} alt="Cardbound" className="topbar-logo" />
-          <button type="button" className="mini-button ghost" onClick={() => setScreen('dashboard')}>Back</button>
+          <button type="button" className="mini-button ghost" onClick={() => setScreen('dashboard')}>← Back</button>
         </header>
 
-        <main className="history-page">
-          <h2>TRADE HISTORY</h2>
+        <main className="history-page history-page-reference">
+          <h2><span className="history-title-accent">T</span>RADE <span className="history-title-accent">H</span>ISTORY</h2>
+          <div className="history-title-divider" aria-hidden="true">
+            <span />
+            <i>✦</i>
+            <span />
+          </div>
           <div className="summary-row">
-            <div className="summary-box"><span>3</span><small>Total Traded</small></div>
-            <div className="summary-box"><span>2</span><small>Received</small></div>
-            <div className="summary-box"><span>1</span><small>Gave Away</small></div>
-            <div className="summary-box"><span>Elara</span><small>Most Active</small></div>
+            <div className="summary-box"><span>{totalHistoryCount}</span><small>Total Traded</small></div>
+            <div className="summary-box"><span>{receivedCount}</span><small>Received</small></div>
+            <div className="summary-box"><span>{gaveAwayCount}</span><small>Gave Away</small></div>
+            <div className="summary-box summary-box-most-active"><span>{mostActivePartner}</span><small>Most Active</small></div>
           </div>
 
           <div className="history-search">
-            <input type="text" placeholder="Filter by card or partner..." />
+            <input
+              type="search"
+              value={historySearch}
+              onChange={(event) => setHistorySearch(event.target.value)}
+              placeholder="Filter by card or partner..."
+            />
           </div>
 
           <div className="history-list">
-            {historyRows.map((row, index) => (
-              <div key={`${row.partner}-${index}`} className="history-row">
-                <div className="history-partner">
-                  <div className="mini-avatar small blue">EN</div>
-                  <span>{row.partner}</span>
+            {visibleHistoryGroups.length === 0 && (
+              <p className="history-empty">
+                {totalHistoryCount === 0 ? 'No traded cards yet.' : 'No trades match your search.'}
+              </p>
+            )}
+            {visibleHistoryGroups.map(({ partner, records, total }) => (
+              <section className="history-group" key={partner.id}>
+                <header className="history-group-heading">
+                  <div className={`mini-avatar small ${partner.color}`}>{partner.initials}</div>
+                  <span className="history-partner-name">{partner.name}</span>
+                  <span className="history-group-total">{total} {total === 1 ? 'trade' : 'trades'}</span>
+                </header>
+                <div className="history-records">
+                  {records.length === 0 && <p className="history-group-empty">No traded cards yet.</p>}
+                  {records.map((record) => {
+                    const directionLabel = record.direction === 'received' ? 'Received' : 'Gave Away'
+                    const tradeDate = record.tradedAt
+                      ? new Intl.DateTimeFormat('en-US', { month: 'short', day: 'numeric' }).format(new Date(record.tradedAt))
+                      : '—'
+
+                    return (
+                      <div className="history-row" key={`${record.id}-${record.direction}`}>
+                        <span className={`history-card-color ${getCardManaColorClass(record.colors)}`} aria-hidden="true" />
+                        {record.image && <img className="history-card-image" src={record.image} alt={`${record.name} card`} loading="lazy" />}
+                        <div className="history-card-info">
+                          <strong>{record.name}</strong>
+                          <span>{record.setCode.toUpperCase()} · {record.rarity.toUpperCase()}</span>
+                        </div>
+                        <span className={`history-status ${record.direction}`}>
+                          <i aria-hidden="true">{record.direction === 'received' ? '↑' : '↓'}</i> {directionLabel}
+                          {record.quantity > 1 && ` ×${record.quantity}`}
+                        </span>
+                        <time className="history-date">{tradeDate}</time>
+                      </div>
+                    )
+                  })}
                 </div>
-                <div className="history-card">
-                  <div className={`card-swatch ${row.color}`} />
-                  <span>{row.card}</span>
-                </div>
-                <div className={`history-status ${row.status.toLowerCase().replace(/\s+/g, '-')}`}>{row.status}</div>
-                <div className="history-date">{row.date}</div>
-              </div>
+              </section>
             ))}
           </div>
         </main>
+
+        <footer className="home-footer">
+          <div className="home-footer-brand">
+            <img src={cardboundFooter} alt="Cardbound" className="footer-logo" />
+            <span className="home-footer-divider" aria-hidden="true" />
+            <span className="home-footer-text">Your personal trading ledger</span>
+          </div>
+
+          <div className="home-footer-meta">
+            <span>Not affiliated with Wizards of the Coast</span>
+            <span className="home-footer-divider" aria-hidden="true" />
+            <span>v1.0.0</span>
+          </div>
+        </footer>
       </div>
     )
   }
