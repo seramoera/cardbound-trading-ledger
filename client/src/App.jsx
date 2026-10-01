@@ -11,6 +11,9 @@ import cardboundLogo from './assets/cardbound-logo.svg'
 import cardboundTop from './assets/cardbound_top.svg'
 import cardboundFooter from './assets/cardbound_footer.svg'
 import circleTrade from './assets/circle_trade.svg'
+import historyIcon from './assets/history.svg'
+import addIcon from './assets/add.svg'
+import signOutIcon from './assets/sign_out.svg'
 
 const EMPTY_FORM = { displayName: '', username: '', password: '', confirmPassword: '' }
 
@@ -1033,16 +1036,25 @@ export default function App() {
     const dashboardTradedCount = dashboardPartners.reduce((total, partner) => total + partner.traded, 0)
 
     return (
-      <div className="app-shell scene-shell dashboard-shell">
+      <div className="app-shell scene-shell dashboard-shell home-dashboard-shell">
         <header className="home-header">
           <div className="home-top-bar">
             <img src={cardboundTop} alt="Cardbound" className="topbar-logo" />
             <div className="home-top-actions">
-              <button type="button" className="home-mini-button" onClick={() => setScreen('history')}>History</button>
-              <button type="button" className="home-add-button" onClick={() => setScreen('new-partner')}>+ Add Partner</button>
+              <button type="button" className="home-mini-button" onClick={() => setScreen('history')}>
+                <img src={historyIcon} alt="" aria-hidden="true" className="home-mobile-action-icon history-action-icon" />
+                History
+              </button>
+              <button type="button" className="home-add-button" onClick={() => setScreen('new-partner')}>
+                <img src={addIcon} alt="" aria-hidden="true" className="home-mobile-action-icon add-action-icon" />
+                + Add Partner
+              </button>
               <span className="home-top-divider" aria-hidden="true" />
-              <span className="home-username">{currentUser?.username || currentUser?.display_name || 'trader'}</span>
-              <button type="button" className="home-signout-button" onClick={handleSignOut}>SIGN OUT</button>
+              <span className="home-username">{currentUser?.display_name || currentUser?.username || 'trader'}</span>
+              <button type="button" className="home-signout-button" onClick={handleSignOut}>
+                <img src={signOutIcon} alt="" aria-hidden="true" className="home-mobile-action-icon signout-action-icon" />
+                SIGN OUT
+              </button>
             </div>
           </div>
 
