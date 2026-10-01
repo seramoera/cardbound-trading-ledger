@@ -373,6 +373,7 @@ export default function App() {
   const [partnerSearch, setPartnerSearch] = useState('')
   const [historySearch, setHistorySearch] = useState('')
   const [selectedPartner, setSelectedPartner] = useState(null)
+  const [mobileTradeSide, setMobileTradeSide] = useState('fromPartner')
   const [tradeCardsByPartner, setTradeCardsByPartner] = useState({})
   const [partnerForm, setPartnerForm] = useState({ name: '', notes: '' })
   const [currentUser, setCurrentUser] = useState(null)
@@ -1046,7 +1047,9 @@ export default function App() {
                 History
               </button>
               <button type="button" className="home-add-button" onClick={() => setScreen('new-partner')}>
-                <img src={addIcon} alt="" aria-hidden="true" className="home-mobile-action-icon add-action-icon" />
+                <span className="add-action-icon-wrap" aria-hidden="true">
+                  <img src={addIcon} alt="" className="home-mobile-action-icon add-action-icon" />
+                </span>
                 + Add Partner
               </button>
               <span className="home-top-divider" aria-hidden="true" />
@@ -1104,6 +1107,7 @@ export default function App() {
                   style={selectedPartner?.id === partner.id ? { '--card-border-color': getPartnerBorderColor(accent) } : undefined}
                   onClick={() => {
                     setSelectedPartner(partner)
+                    setMobileTradeSide('fromPartner')
                     setScreen('trade')
                   }}
                 >
@@ -1213,6 +1217,35 @@ export default function App() {
           </div>
         </section>
 
+        <div
+          className="trade-mobile-tabs"
+          role="tablist"
+          aria-label="Trade inventory"
+          style={{
+            '--trade-partner-accent': getPartnerBorderColor(selectedPartner.color),
+            '--trade-partner-gradient': getPartnerGradient(selectedPartner.color),
+          }}
+        >
+          <button
+            type="button"
+            role="tab"
+            aria-selected={mobileTradeSide === 'fromPartner'}
+            className={mobileTradeSide === 'fromPartner' ? 'active' : ''}
+            onClick={() => setMobileTradeSide('fromPartner')}
+          >
+            I WANT <strong>{fromPartnerCounts.total}</strong> <small>({fromPartnerCounts.pending})</small>
+          </button>
+          <button
+            type="button"
+            role="tab"
+            aria-selected={mobileTradeSide === 'fromUser'}
+            className={mobileTradeSide === 'fromUser' ? 'active' : ''}
+            onClick={() => setMobileTradeSide('fromUser')}
+          >
+            THEY WANT <strong>{fromUserCounts.total}</strong> <small>({fromUserCounts.pending})</small>
+          </button>
+        </div>
+
         <main className="trade-page">
           <div
             className="trade-columns"
@@ -1221,7 +1254,7 @@ export default function App() {
               '--trade-partner-gradient': getPartnerGradient(selectedPartner.color),
             }}
           >
-            <section className="trade-panel">
+            <section className={`trade-panel trade-panel-from-partner${mobileTradeSide === 'fromPartner' ? ' mobile-active' : ''}`}>
               <div className="trade-panel-heading">
                 <div className="panel-heading panel-heading-want">I WANT · FROM {selectedPartner.name.toUpperCase()}</div>
                 <div className="trade-panel-count"><strong>{fromPartnerCounts.total}</strong><small>Cards</small></div>
@@ -1281,7 +1314,7 @@ export default function App() {
               <span className="trade-divider-marker" />
             </div>
 
-            <section className="trade-panel">
+            <section className={`trade-panel trade-panel-from-user${mobileTradeSide === 'fromUser' ? ' mobile-active' : ''}`}>
               <div className="trade-panel-heading">
                 <div className="panel-heading panel-heading-they-want">THEY WANT · FROM ME</div>
                 <div className="trade-panel-count"><strong>{fromUserCounts.total}</strong><small>Cards</small></div>
@@ -1482,6 +1515,7 @@ export default function App() {
       <div className="app-shell scene-shell new-partner-shell">
         <header className="top-bar">
           <img src={cardboundTop} alt="Cardbound" className="topbar-logo" />
+          <button type="button" className="mini-button ghost new-partner-back-button" onClick={() => setScreen('dashboard')}>← Back</button>
         </header>
 
         <div className="overlay-backdrop" onClick={() => setScreen('dashboard')} />
