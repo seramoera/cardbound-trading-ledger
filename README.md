@@ -49,6 +49,11 @@ VITE_SUPABASE_ANON_KEY=your-anon-key
 
 These values come from your Supabase project dashboard. Use the base project URL, not the REST endpoint such as `/rest/v1`.
 
+Before using trade inventories, run [`docs/supabase-trade-history.sql`](docs/supabase-trade-history.sql)
+in the Supabase SQL editor. It creates the user-owned `trade_history` table and
+Row Level Security policy used to share card lists, quantities, and traded state
+across devices and desktop/mobile layouts.
+
 #### Server environment variables
 
 The app's live database is in Supabase, not in the local `server` folder. If you still run the local backend for development or health checks, you can keep a minimal `server/.env` file like this:

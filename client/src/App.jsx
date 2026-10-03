@@ -93,6 +93,41 @@ function getPartnerTradeCounts(cardLists = {}) {
   }
 }
 
+function tradeStateFromRows(rows = []) {
+  return rows.reduce((current, row) => {
+    const partnerLists = current[row.partner_id] || { fromPartner: [], fromUser: [] }
+    const listName = row.list_name === 'fromUser' ? 'fromUser' : 'fromPartner'
+    const card = {
+      ...(row.card_data || {}),
+      id: row.card_id,
+      quantity: row.quantity,
+      isTraded: row.is_traded,
+      tradedAt: row.traded_at,
+    }
+
+    return {
+      ...current,
+      [row.partner_id]: {
+        ...partnerLists,
+        [listName]: [...partnerLists[listName], card],
+      },
+    }
+  }, {})
+}
+
+function toTradeHistoryRow(ownerId, partnerId, listName, card) {
+  return {
+    owner_id: ownerId,
+    partner_id: partnerId,
+    list_name: listName,
+    card_id: String(card.id),
+    card_data: card,
+    quantity: card.quantity,
+    is_traded: Boolean(card.isTraded),
+    traded_at: card.tradedAt || null,
+  }
+}
+
 function formatScryfallPrice(price) {
   if (price === null || price === undefined || price === '') return 'Price unavailable'
 
@@ -456,14 +491,24 @@ export default function App() {
     async function loadPartners() {
       setPartnerCards([])
       setSelectedPartner(null)
+      setTradeCardsByPartner({})
 
       if (!session?.user) return
 
-      const { data, error: partnersError } = await supabase
-        .from('partners')
-        .select('id, name, initials, notes, color, created_at')
-        .eq('owner_id', session.user.id)
-        .order('created_at', { ascending: false })
+      const [partnersResult, tradeHistoryResult] = await Promise.all([
+        supabase
+          .from('partners')
+          .select('id, name, initials, notes, color, created_at')
+          .eq('owner_id', session.user.id)
+          .order('created_at', { ascending: false }),
+        supabase
+          .from('trade_history')
+          .select('partner_id, list_name, card_id, card_data, quantity, is_traded, traded_at')
+          .eq('owner_id', session.user.id),
+      ])
+
+      const { data, error: partnersError } = partnersResult
+      const { data: tradeRows, error: tradeHistoryError } = tradeHistoryResult
 
       if (!active) return
 
@@ -472,19 +517,23 @@ export default function App() {
         return
       }
 
+      if (tradeHistoryError) {
+        setError(`Could not load trade history: ${tradeHistoryError.message}`)
+        return
+      }
+
+      const loadedTradeState = tradeStateFromRows(tradeRows || [])
+
       const loadedPartners = (data || []).map((partner) => ({
         ...partner,
         color: partner.color || getRandomPartnerColor(),
         note: partner.notes || 'New trading partner.',
-        pending: 0,
-        want: 0,
-        have: 0,
-        traded: 0,
-        total: 0,
+        ...getPartnerTradeCounts(loadedTradeState[partner.id]),
       }))
 
       setPartnerCards(loadedPartners)
       setSelectedPartner(loadedPartners[0] || null)
+      setTradeCardsByPartner(loadedTradeState)
     }
 
     loadPartners()
@@ -750,7 +799,22 @@ export default function App() {
     }
   }
 
-  function addTradeCard(listName, card) {
+  async function saveTradeCard(listName, card) {
+    if (!session?.user || !selectedPartner) {
+      throw new Error('Sign in before saving trade cards.')
+    }
+
+    const { error: saveError } = await supabase
+      .from('trade_history')
+      .upsert(
+        toTradeHistoryRow(session.user.id, selectedPartner.id, listName, card),
+        { onConflict: 'owner_id,partner_id,list_name,card_id' },
+      )
+
+    if (saveError) throw saveError
+  }
+
+  async function addTradeCard(listName, card) {
     if (!selectedPartner) return
 
     const cardEntry = {
@@ -776,87 +840,109 @@ export default function App() {
       isTraded: false,
     }
 
-    setTradeCardsByPartner((current) => {
-      const lists = current[selectedPartner.id] || { fromPartner: [], fromUser: [] }
-      const existingCard = lists[listName].find((item) => item.id === cardEntry.id)
+    const partnerLists = tradeCardsByPartner[selectedPartner.id] || { fromPartner: [], fromUser: [] }
+    const existingCard = partnerLists[listName].find((item) => item.id === cardEntry.id)
+    const updatedCard = existingCard
+      ? { ...existingCard, quantity: existingCard.quantity + 1 }
+      : cardEntry
 
-      if (existingCard) {
+    try {
+      await saveTradeCard(listName, updatedCard)
+      setTradeCardsByPartner((current) => {
+        const lists = current[selectedPartner.id] || { fromPartner: [], fromUser: [] }
+        const hasCard = lists[listName].some((item) => item.id === updatedCard.id)
+
         return {
           ...current,
           [selectedPartner.id]: {
             ...lists,
-            [listName]: lists[listName].map((item) =>
-              item.id === cardEntry.id ? { ...item, quantity: item.quantity + 1 } : item,
-            ),
+            [listName]: hasCard
+              ? lists[listName].map((item) => item.id === updatedCard.id ? updatedCard : item)
+              : [...lists[listName], updatedCard],
           },
         }
-      }
-
-      return {
-        ...current,
-        [selectedPartner.id]: {
-          ...lists,
-          [listName]: [...lists[listName], cardEntry],
-        },
-      }
-    })
+      })
+    } catch (caught) {
+      setError(`Could not save card: ${caught.message}`)
+    }
   }
 
-  function changeTradeCardQuantity(listName, cardId, amount) {
+  async function changeTradeCardQuantity(listName, cardId, amount) {
     if (!selectedPartner) return
 
-    setTradeCardsByPartner((current) => {
-      const lists = current[selectedPartner.id] || { fromPartner: [], fromUser: [] }
-      return {
+    const partnerLists = tradeCardsByPartner[selectedPartner.id] || { fromPartner: [], fromUser: [] }
+    const card = partnerLists[listName].find((item) => item.id === cardId)
+    if (!card) return
+
+    const updatedCard = { ...card, quantity: Math.max(1, card.quantity + amount) }
+    try {
+      await saveTradeCard(listName, updatedCard)
+      setTradeCardsByPartner((current) => ({
         ...current,
         [selectedPartner.id]: {
-          ...lists,
-          [listName]: lists[listName].map((card) =>
-            card.id === cardId
-              ? { ...card, quantity: Math.max(1, card.quantity + amount) }
-              : card,
+          ...(current[selectedPartner.id] || { fromPartner: [], fromUser: [] }),
+          [listName]: (current[selectedPartner.id]?.[listName] || []).map((item) =>
+            item.id === cardId ? updatedCard : item,
           ),
         },
-      }
-    })
+      }))
+    } catch (caught) {
+      setError(`Could not save quantity: ${caught.message}`)
+    }
   }
 
-  function toggleTradeCardTraded(listName, cardId) {
+  async function toggleTradeCardTraded(listName, cardId) {
     if (!selectedPartner) return
 
-    setTradeCardsByPartner((current) => {
-      const lists = current[selectedPartner.id] || { fromPartner: [], fromUser: [] }
-      return {
+    const partnerLists = tradeCardsByPartner[selectedPartner.id] || { fromPartner: [], fromUser: [] }
+    const card = partnerLists[listName].find((item) => item.id === cardId)
+    if (!card) return
+
+    const updatedCard = {
+      ...card,
+      isTraded: !card.isTraded,
+      tradedAt: card.isTraded ? null : new Date().toISOString(),
+    }
+    try {
+      await saveTradeCard(listName, updatedCard)
+      setTradeCardsByPartner((current) => ({
         ...current,
         [selectedPartner.id]: {
-          ...lists,
-          [listName]: lists[listName].map((card) =>
-            card.id === cardId
-              ? {
-                  ...card,
-                  isTraded: !card.isTraded,
-                  tradedAt: card.isTraded ? null : new Date().toISOString(),
-                }
-              : card,
+          ...(current[selectedPartner.id] || { fromPartner: [], fromUser: [] }),
+          [listName]: (current[selectedPartner.id]?.[listName] || []).map((item) =>
+            item.id === cardId ? updatedCard : item,
           ),
         },
-      }
-    })
+      }))
+    } catch (caught) {
+      setError(`Could not save trade status: ${caught.message}`)
+    }
   }
 
-  function removeTradeCard(listName, cardId) {
+  async function removeTradeCard(listName, cardId) {
     if (!selectedPartner) return
 
-    setTradeCardsByPartner((current) => {
-      const lists = current[selectedPartner.id] || { fromPartner: [], fromUser: [] }
-      return {
+    try {
+      const { error: deleteError } = await supabase
+        .from('trade_history')
+        .delete()
+        .eq('owner_id', session.user.id)
+        .eq('partner_id', selectedPartner.id)
+        .eq('list_name', listName)
+        .eq('card_id', String(cardId))
+
+      if (deleteError) throw deleteError
+
+      setTradeCardsByPartner((current) => ({
         ...current,
         [selectedPartner.id]: {
-          ...lists,
-          [listName]: lists[listName].filter((card) => card.id !== cardId),
+          ...(current[selectedPartner.id] || { fromPartner: [], fromUser: [] }),
+          [listName]: (current[selectedPartner.id]?.[listName] || []).filter((card) => card.id !== cardId),
         },
-      }
-    })
+      }))
+    } catch (caught) {
+      setError(`Could not remove card: ${caught.message}`)
+    }
   }
 
   if (loading) {

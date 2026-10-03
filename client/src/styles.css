@@ -85,9 +85,9 @@ button {
   position: relative;
   min-height: 100vh;
   background:
-    linear-gradient(180deg, rgba(34, 22, 16, 0.22), rgba(20, 16, 14, 0.26)),
-    linear-gradient(120deg, rgba(92, 69, 49, 0.24), rgba(20, 24, 29, 0.2)),
-    url('./assets/background_onboarding.svg') center/cover no-repeat;
+    linear-gradient(180deg, rgba(27, 14, 8, 0.58), rgba(11, 6, 5, 0.72)),
+    linear-gradient(120deg, rgba(103, 48, 17, 0.34), rgba(18, 9, 6, 0.4)),
+    url('./assets/chandra_bg.jpg') center/cover no-repeat;
   overflow: hidden;
 }
 
@@ -97,6 +97,13 @@ button {
     linear-gradient(180deg, rgba(21, 15, 14, 0.62), rgba(16, 12, 11, 0.74)),
     linear-gradient(120deg, rgba(83, 69, 48, 0.18), rgba(18, 15, 17, 0.18)),
     url('./assets/ajani_bg.svg') center/cover no-repeat;
+}
+
+@media (max-width: 520px) {
+  .app-shell:not(.dashboard-shell):not(.new-partner-shell):not(.trade-shell):not(.history-shell) {
+    background-position: center, center, center 15%;
+    background-size: auto, auto, auto 108%;
+  }
 }
 
 .app-shell::before {
@@ -1254,6 +1261,14 @@ button {
     url('./assets/ajani_bg.svg') center / cover no-repeat;
 }
 
+@media (max-width: 520px) {
+  .dashboard-shell,
+  .new-partner-shell,
+  .trade-shell {
+    background-position: center, center, 23% center;
+  }
+}
+
 .trade-shell .trade-top-bar {
   z-index: 2;
   height: 55.2px;
@@ -2082,7 +2097,6 @@ button {
     height: auto;
     border: 0;
     border-radius: 99px;
-    background: var(--trade-partner-accent, #b78942);
     box-shadow: none;
   }
 
