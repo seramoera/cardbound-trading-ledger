@@ -808,13 +808,21 @@ export default function App() {
     setError('')
 
     try {
-      const { error: deleteError } = await supabase
+      const { error: tradeRowsError } = await supabase
+        .from('trade_history')
+        .delete()
+        .eq('owner_id', session.user.id)
+        .eq('partner_id', partnerId)
+
+      if (tradeRowsError) throw tradeRowsError
+
+      const { error: partnerDeleteError } = await supabase
         .from('partners')
         .delete()
         .eq('id', partnerId)
         .eq('owner_id', session.user.id)
 
-      if (deleteError) throw deleteError
+      if (partnerDeleteError) throw partnerDeleteError
 
       setPartnerCards((current) => {
         const remaining = current.filter((partner) => partner.id !== partnerId)

@@ -86,7 +86,7 @@ from anon, public, authenticated;
 grant select, insert, update
   on table public.profiles to authenticated;
 
-grant select, insert
+grant select, insert, update, delete
   on table public.partners to authenticated;
 
 grant select, insert, update, delete
