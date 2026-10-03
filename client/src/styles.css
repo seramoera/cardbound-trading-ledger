@@ -2997,8 +2997,6 @@ button {
 
 .home-card {
   position: relative;
-  display: flex;
-  flex-direction: column;
   width: 100%;
   background: rgba(17, 11, 10, 0.72);
   border: 1px solid rgba(216, 176, 106, 0.35);
@@ -3018,6 +3016,47 @@ button {
 .home-card.selected {
   border-color: var(--card-border-color, rgba(216, 176, 106, 0.35));
   box-shadow: none;
+}
+
+.home-card-shell {
+  display: flex;
+  align-items: stretch;
+  width: 100%;
+}
+
+.home-card-main {
+  flex: 1;
+  min-width: 0;
+  border: 0;
+  background: transparent;
+  color: inherit;
+  padding: 0;
+  text-align: left;
+  cursor: pointer;
+}
+
+.home-card-delete {
+  display: grid;
+  place-items: center;
+  width: 46px;
+  min-width: 46px;
+  border: 0;
+  border-left: 1px solid rgba(216, 176, 106, 0.18);
+  background: rgba(16, 10, 8, 0.8);
+  color: rgba(239, 196, 119, 0.8);
+  cursor: pointer;
+  transition: background 0.15s ease, color 0.15s ease;
+}
+
+.home-card-delete:hover,
+.home-card-delete:focus-visible {
+  background: rgba(83, 13, 12, 0.9);
+  color: #ffd7ba;
+}
+
+.home-card-delete svg {
+  width: 18px;
+  height: 18px;
 }
 
 .home-card-gold { border-color: rgba(216, 176, 106, 0.7); }

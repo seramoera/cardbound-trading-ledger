@@ -795,6 +795,49 @@ export default function App() {
     }
   }
 
+  async function handleDeletePartner(partnerId) {
+    if (!session?.user) {
+      setError('Please sign in before removing a partner.')
+      return
+    }
+
+    const partnerToDelete = partnerCards.find((partner) => partner.id === partnerId)
+    if (!partnerToDelete) return
+
+    setBusy(true)
+    setError('')
+
+    try {
+      const { error: deleteError } = await supabase
+        .from('partners')
+        .delete()
+        .eq('id', partnerId)
+        .eq('owner_id', session.user.id)
+
+      if (deleteError) throw deleteError
+
+      setPartnerCards((current) => {
+        const remaining = current.filter((partner) => partner.id !== partnerId)
+        setSelectedPartner((currentSelection) => (currentSelection?.id === partnerId ? remaining[0] || null : currentSelection))
+        return remaining
+      })
+
+      setTradeCardsByPartner((current) => {
+        const nextTradeCards = { ...current }
+        delete nextTradeCards[partnerId]
+        return nextTradeCards
+      })
+
+      if (screen === 'trade' && selectedPartner?.id === partnerId) {
+        setScreen('dashboard')
+      }
+    } catch (caught) {
+      setError(caught.message || `Could not remove ${partnerToDelete.name}.`)
+    } finally {
+      setBusy(false)
+    }
+  }
+
   async function saveTradeCard(listName, card) {
     if (!session?.user || !selectedPartner) {
       throw new Error('Sign in before saving trade cards.')
@@ -1182,62 +1225,83 @@ export default function App() {
               const accent = partner.color || homeAccents[index % homeAccents.length]
 
               return (
-                <button
-                  type="button"
+                <div
                   key={partner.id}
                   className={`home-card home-card-${accent} ${selectedPartner?.id === partner.id ? 'selected' : ''}`}
                   style={selectedPartner?.id === partner.id ? { '--card-border-color': getPartnerBorderColor(accent) } : undefined}
-                  onClick={() => {
-                    setSelectedPartner(partner)
-                    setMobileTradeSide('fromPartner')
-                    setScreen('trade')
-                  }}
                 >
-                  <div className="home-card-body">
-                    <div className="home-card-row">
-                      <div className={`home-avatar ${accent}`}>
-                        {partner.initials}
-                        <span className="home-avatar-dot" />
-                      </div>
-                      <div className="home-card-name-wrap">
-                        <div className="home-card-name-row">
-                          <span className="home-card-name">{partner.name}</span>
-                          <span className="home-pending-badge">{partner.pending} Pending</span>
+                  <div className="home-card-shell">
+                    <button
+                      type="button"
+                      className="home-card-main"
+                      onClick={() => {
+                        setSelectedPartner(partner)
+                        setMobileTradeSide('fromPartner')
+                        setScreen('trade')
+                      }}
+                    >
+                      <div className="home-card-body">
+                        <div className="home-card-row">
+                          <div className={`home-avatar ${accent}`}>
+                            {partner.initials}
+                            <span className="home-avatar-dot" />
+                          </div>
+                          <div className="home-card-name-wrap">
+                            <div className="home-card-name-row">
+                              <span className="home-card-name">{partner.name}</span>
+                              <span className="home-pending-badge">{partner.pending} Pending</span>
+                            </div>
+                            <div className="home-card-note">{partner.note}</div>
+                          </div>
                         </div>
-                        <div className="home-card-note">{partner.note}</div>
-                      </div>
-                    </div>
 
-                    <div className="home-stats-row">
-                      <div className="home-stat-col">
-                        <span className="home-stat-num">{partner.pending}</span>
-                        <span className="home-stat-label">Pending</span>
-                      </div>
-                      <div className="home-stat-col">
-                        <span className="home-stat-num blue">{partner.want}</span>
-                        <span className="home-stat-label">I Want</span>
-                      </div>
-                      <div className="home-stat-col">
-                        <span className="home-stat-num green">{partner.have}</span>
-                        <span className="home-stat-label">They Want</span>
-                      </div>
-                      <div className="home-stat-col">
-                        <span className="home-stat-num">{partner.traded}</span>
-                        <span className="home-stat-label">Traded</span>
-                      </div>
-                    </div>
+                        <div className="home-stats-row">
+                          <div className="home-stat-col">
+                            <span className="home-stat-num">{partner.pending}</span>
+                            <span className="home-stat-label">Pending</span>
+                          </div>
+                          <div className="home-stat-col">
+                            <span className="home-stat-num blue">{partner.want}</span>
+                            <span className="home-stat-label">I Want</span>
+                          </div>
+                          <div className="home-stat-col">
+                            <span className="home-stat-num green">{partner.have}</span>
+                            <span className="home-stat-label">They Want</span>
+                          </div>
+                          <div className="home-stat-col">
+                            <span className="home-stat-num">{partner.traded}</span>
+                            <span className="home-stat-label">Traded</span>
+                          </div>
+                        </div>
 
-                    <div className="home-progress-label">
-                      <span>Trade Progress</span>
-                      <span>{partner.progress}%</span>
-                    </div>
-                    <div className="home-progress-wrap">
-                      <div className="home-progress-bar" style={{ width: `${partner.progress}%`, background: getPartnerGradient(partner.color) }} />
-                    </div>
+                        <div className="home-progress-label">
+                          <span>Trade Progress</span>
+                          <span>{partner.progress}%</span>
+                        </div>
+                        <div className="home-progress-wrap">
+                          <div className="home-progress-bar" style={{ width: `${partner.progress}%`, background: getPartnerGradient(partner.color) }} />
+                        </div>
+                      </div>
+
+                      <div className="home-card-footer">Last traded {partner.lastTrade || 'Aug 15, 2026'}</div>
+                    </button>
+
+                    <button
+                      type="button"
+                      className="home-card-delete"
+                      aria-label={`Delete ${partner.name}`}
+                      title={`Delete ${partner.name}`}
+                      onClick={(event) => {
+                        event.stopPropagation()
+                        handleDeletePartner(partner.id)
+                      }}
+                    >
+                      <svg viewBox="0 0 24 24" aria-hidden="true">
+                        <path d="M4 7h16M9 7V4.5A1.5 1.5 0 0 1 10.5 3h3A1.5 1.5 0 0 1 15 4.5V7m-9 0 1.2 12.3A2 2 0 0 0 9.17 21h5.66a2 2 0 0 0 1.97-1.7L18 7H6Z" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round"/>
+                      </svg>
+                    </button>
                   </div>
-
-                  <div className="home-card-footer">Last traded {partner.lastTrade || 'Aug 15, 2026'}</div>
-                </button>
+                </div>
               )
             })}
           </section>
