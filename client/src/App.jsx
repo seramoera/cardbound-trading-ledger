@@ -93,6 +93,21 @@ function getPartnerTradeCounts(cardLists = {}) {
   }
 }
 
+function getLastTradeDate(cardLists = {}) {
+  const timestamps = [...(cardLists.fromPartner || []), ...(cardLists.fromUser || [])]
+    .filter((card) => card.isTraded && card.tradedAt)
+    .map((card) => new Date(card.tradedAt).getTime())
+    .filter(Number.isFinite)
+
+  if (timestamps.length === 0) return 'No trades yet'
+
+  return new Intl.DateTimeFormat('en-US', {
+    month: 'short',
+    day: 'numeric',
+    year: 'numeric',
+  }).format(new Date(Math.max(...timestamps)))
+}
+
 function tradeStateFromRows(rows = []) {
   return rows.reduce((current, row) => {
     const partnerLists = current[row.partner_id] || { fromPartner: [], fromUser: [] }
@@ -1161,6 +1176,7 @@ export default function App() {
     const searchTerm = partnerSearch.trim().toLowerCase()
     const dashboardPartners = partnerCards.map((partner) => ({
       ...partner,
+      lastTrade: getLastTradeDate(tradeCardsByPartner[partner.id]),
       ...getPartnerTradeCounts(tradeCardsByPartner[partner.id]),
     }))
     const visiblePartners = dashboardPartners.filter((partner) =>
@@ -1291,7 +1307,7 @@ export default function App() {
                         </div>
                       </div>
 
-                      <div className="home-card-footer">Last traded {partner.lastTrade || 'Aug 15, 2026'}</div>
+                      <div className="home-card-footer">Last traded {partner.lastTrade}</div>
                     </button>
 
                     <button
