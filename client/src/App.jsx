@@ -613,17 +613,13 @@ export default function App() {
       return false
     }
 
-    const { data, error } = await supabase
-      .from('profiles')
-      .select('username')
-      .eq('username', normalizedUsername)
-      .maybeSingle()
+    const { data, error } = await supabase.rpc('is_username_available', {
+      requested_username: normalizedUsername,
+    })
 
-    if (error && error.code !== 'PGRST116') {
-      throw error
-    }
+    if (error) throw error
 
-    return !data
+    return Boolean(data)
   }
 
   async function handleAuthSubmit(event) {
