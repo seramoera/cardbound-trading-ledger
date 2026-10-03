@@ -66,9 +66,9 @@ The app requires `profiles` and `partners` tables plus the `handle_new_user` aut
 
 ## Deploying
 
-The GitHub Pages workflow is [`.github/workflows/deploy-pages.yml`](.github/workflows/deploy-pages.yml). Configure **Settings → Pages → Build and deployment → Source: GitHub Actions**, then add `VITE_SUPABASE_URL` and `VITE_SUPABASE_ANON_KEY` as repository Actions variables. Run **Actions → Deploy client to GitHub Pages → Run workflow** after changing those variables. The workflow checks that both values are present, builds the Vite client with the repository base path, copies `index.html` to `404.html`, and uploads only `client/dist`.
+The GitHub Pages workflow is [`.github/workflows/deploy-pages.yml`](.github/workflows/deploy-pages.yml). Configure **Settings → Pages → Build and deployment → Source: GitHub Actions**, then add `VITE_SUPABASE_URL` and `VITE_SUPABASE_ANON_KEY` as repository Actions variables. Run **Actions → Deploy client to GitHub Pages → Run workflow** after changing those variables.
 
-The expected Pages address is `https://seramoera.github.io/cardbound-trading-ledger/`. It returned 404 when checked on 2026-10-03, so the live deployment is not confirmed yet. Supabase is the app's hosted backend; there is no separate API host or `CORS_ORIGINS` setting needed for the active client path.
+The expected Pages address is `https://seramoera.github.io/cardbound-trading-ledger/`. Supabase is the app's hosted backend; there is no separate API host or `CORS_ORIGINS` setting needed for the active client path.
 
 ## Project Structure
 
