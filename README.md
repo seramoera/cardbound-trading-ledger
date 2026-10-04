@@ -4,7 +4,7 @@ Cardbound is a mobile- and desktop-friendly trading ledger for Magic: The Gather
 
 - **Live site:** [Cardbound](https://seramoera.github.io/cardbound-trading-ledger/)
 - **Backend:** Supabase Auth, Postgres, and its client-facing API. No separate Express API is used by the app.
-- **Demo video:** [Cardbound Demo](docs/assets/Cardbound-Demo.mp4)
+- **Demo video:** [Cardbound Demo](https://drive.google.com/file/d/129s45QcBg6w9J-uSRgBTmqGklzH0Fb4k/view?usp=sharing)
 
 ![Cardbound onboarding](docs/assets/onboarding.png)
 
