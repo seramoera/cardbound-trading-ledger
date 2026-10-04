@@ -69,8 +69,6 @@ This project was built with AI assistance. This file records how I used it and w
 
 ## 3. Who wrote what
 
-Git history records the committer, not which lines were typed by me versus suggested by AI. I must complete the first entry honestly before submitting; do not treat AI-assisted code as entirely self-written.
-
 ### Written by me - desktop stylesheet and screen layout
 - **File:** `client/src/styles.css`
 - **Commit:** [Desktop UI/UX stylesheet changes](https://github.com/seramoera/cardbound-trading-ledger/commit/3c434342296640994710da4d346843a2a8ef1541#diff-0e45e2badfea83a42cb89739df91080ba70c458e4f03bfec70055dcae7ea594a)
