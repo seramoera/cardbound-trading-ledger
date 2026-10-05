@@ -95,13 +95,14 @@ The React/Vite client is built and hosted as static files on GitHub Pages. In th
 
 ## Screenshots
 
+![Onboarding](docs/assets/onboarding.png)
 ![Log in](docs/assets/log_in.png)
 ![Create account](docs/assets/create_account.png)
 ![Trading partner dashboard](docs/assets/dashboard.png)
 ![Add a trading partner](docs/assets/partner_form.png)
-![History](docs/assets/history.png)
-![Onboarding](docs/assets/onboarding.png)
 ![Trade Inventory](docs/assets/trade_screen.png)
+![History](docs/assets/history.png)
+
 
 ## Third-party attribution
 
